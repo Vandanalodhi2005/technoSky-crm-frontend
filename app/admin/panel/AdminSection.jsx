@@ -21,6 +21,7 @@ const emptyLead = {
   status: "New",
   source: "Website",
   notes: "",
+  assignedTo: "",
 };
 
 async function requestJson(path, options = {}) {
@@ -216,6 +217,7 @@ function AdminDashboard() {
 
 function LeadsPage() {
   const [leads, setLeads] = useState([]);
+  const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [form, setForm] = useState(emptyLead);
@@ -233,8 +235,12 @@ function LeadsPage() {
       const params = new URLSearchParams();
       if (query.trim()) params.set("q", query.trim());
       if (status !== "All") params.set("status", status);
-      const result = await requestJson(`/admin/leads?${params.toString()}`);
+      const [result, usersResult] = await Promise.all([
+        requestJson(`/admin/leads?${params.toString()}`),
+        requestJson("/admin/users"),
+      ]);
       setLeads(result.data);
+      setUsers(usersResult.data);
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -258,6 +264,7 @@ function LeadsPage() {
       status: lead.status || "New",
       source: lead.source || "Website",
       notes: lead.notes || "",
+      assignedTo: lead.assignedTo?._id || lead.assignedTo || "",
     });
     setShowForm(true);
     setError("");
@@ -388,6 +395,17 @@ function LeadsPage() {
                 {SOURCES.map((item) => <option key={item}>{item}</option>)}
               </select>
             </label>
+            <label>
+              Assigned employee
+              <select name="assignedTo" value={form.assignedTo} onChange={setField}>
+                <option value="">Unassigned</option>
+                {users.filter((user) => (user.isActive && user.isApproved) || user._id === form.assignedTo).map((user) => (
+                  <option key={user._id} value={user._id} disabled={!user.isActive || !user.isApproved}>
+                    {user.name} · {user.email}{user.isApproved && user.isActive ? "" : " (not eligible)"}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="admin-form-wide">
               Notes
               <textarea name="notes" value={form.notes} onChange={setField} maxLength={2000} rows={3} />
@@ -425,17 +443,18 @@ function LeadsPage() {
           <div className="table-scroll">
             <table>
               <thead>
-                <tr><th>LEAD</th><th>SERVICE</th><th>STATUS</th><th>SOURCE</th><th>CREATED</th><th>ACTIONS</th></tr>
+                <tr><th>LEAD</th><th>SERVICE</th><th>STATUS</th><th>SOURCE</th><th>ASSIGNED TO</th><th>CREATED</th><th>ACTIONS</th></tr>
               </thead>
               <tbody>
                 {leads.length === 0 ? (
-                  <tr><td colSpan="6">No leads match this filter.</td></tr>
+                  <tr><td colSpan="7">No leads match this filter.</td></tr>
                 ) : leads.map((lead) => (
                   <tr key={lead._id}>
                     <td><strong>{lead.name}</strong><small className="admin-cell-secondary">{lead.company || lead.email || "—"}</small></td>
                     <td>{lead.service}</td>
                     <td><span className={`admin-status status-${lead.status.toLowerCase().replaceAll(" ", "-")}`}>{lead.status}</span></td>
                     <td>{lead.source}</td>
+                    <td>{users.find((user) => user._id === (lead.assignedTo?._id || lead.assignedTo))?.name || "Unassigned"}</td>
                     <td>{formatDate(lead.createdAt)}</td>
                     <td><div className="admin-row-actions"><button className="secondary-button" onClick={() => startEdit(lead)}>Edit</button><button className="danger-button" onClick={() => deleteLead(lead)}>Delete</button></div></td>
                   </tr>
@@ -496,6 +515,24 @@ function UsersPage() {
     }
   }
 
+  async function toggleApproval(user) {
+    setBusyId(user._id);
+    setError("");
+    setNotice("");
+    try {
+      await requestJson(`/admin/users/${user._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isApproved: !user.isApproved }),
+      });
+      setNotice(`${user.name}’s account ${user.isApproved ? "approval revoked" : "approved"}.`);
+      await load();
+    } catch (updateError) {
+      setError(updateError.message);
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function deleteUser(user) {
     const confirmed = window.confirm(
       `Permanently delete ${user.email}’s account? Their leads will not be deleted, but this cannot be undone.`
@@ -535,15 +572,16 @@ function UsersPage() {
         {loading ? <LoadingState /> : (
           <div className="table-scroll">
             <table>
-              <thead><tr><th>USER</th><th>VERIFIED</th><th>JOINED</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+              <thead><tr><th>USER</th><th>VERIFIED</th><th>JOINED</th><th>APPROVAL</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
               <tbody>
-                {users.length === 0 ? <tr><td colSpan="5">No registered users found.</td></tr> : users.map((user) => (
+                {users.length === 0 ? <tr><td colSpan="6">No registered users found.</td></tr> : users.map((user) => (
                   <tr key={user._id}>
                     <td><strong>{user.name}</strong><small className="admin-cell-secondary">{user.email}</small></td>
                     <td>{formatDate(user.emailVerifiedAt)}</td>
                     <td>{formatDate(user.createdAt)}</td>
+                    <td><span className={`admin-status ${user.isApproved ? "status-active" : "status-suspended"}`}>{user.isApproved ? "Approved" : "Pending approval"}</span></td>
                     <td><span className={`admin-status ${user.isActive ? "status-active" : "status-suspended"}`}>{user.isActive ? "Active" : "Suspended"}</span></td>
-                    <td><div className="admin-row-actions"><button className="secondary-button" disabled={busyId === user._id} onClick={() => toggleUser(user)}>{user.isActive ? "Suspend" : "Restore"}</button><button className="danger-button" disabled={busyId === user._id} onClick={() => deleteUser(user)}>Delete</button></div></td>
+                    <td><div className="admin-row-actions"><button className="secondary-button" disabled={busyId === user._id} onClick={() => toggleApproval(user)}>{user.isApproved ? "Revoke approval" : "Approve"}</button><button className="secondary-button" disabled={busyId === user._id} onClick={() => toggleUser(user)}>{user.isActive ? "Suspend" : "Restore"}</button><button className="danger-button" disabled={busyId === user._id} onClick={() => deleteUser(user)}>Delete</button></div></td>
                   </tr>
                 ))}
               </tbody>

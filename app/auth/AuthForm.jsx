@@ -110,6 +110,33 @@ export default function AuthForm({ mode }) {
     }
   }
 
+  if (isRegistration) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <Link href="/" className="brand auth-brand">
+            <span className="brand-mark">T</span>
+            <span>
+              <strong>TECHNOSKY</strong>
+              <small>CRM WORKSPACE</small>
+            </span>
+          </Link>
+          <div className="auth-heading">
+            <p className="eyebrow">SECURE CRM ACCESS</p>
+            <h1>Registration unavailable</h1>
+          </div>
+          <div className="alert success-alert" role="status">
+            Public registration is disabled. Contact an administrator for
+            account approval. New employee enrollment is not available yet.
+          </div>
+          <p className="auth-switch">
+            <Link href="/login">Back to sign in</Link>
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">

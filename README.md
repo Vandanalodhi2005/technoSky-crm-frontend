@@ -37,4 +37,4 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## CRM environment
 
-Set `NEXT_PUBLIC_API_URL` in `frontend/my-app/.env.local` to the backend API base URL. Use `.env.example` as a placeholder template. Register at `/register`; the backend sends an email verification code to the address entered on the form.
+Set `NEXT_PUBLIC_API_URL` in `frontend/my-app/.env.local` to the backend API base URL. Use `.env.example` as a placeholder template. Public registration at `/register` is disabled; an administrator must approve an existing verified account before it can sign in.
